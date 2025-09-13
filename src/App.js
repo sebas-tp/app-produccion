@@ -4,8 +4,11 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, 
 import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc } from "firebase/firestore";
 
 // Configuración de Firebase (variables globales del entorno)
+// eslint-disable-next-line no-undef
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// eslint-disable-next-line no-undef
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// eslint-disable-next-line no-undef
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
 // Inicializar Firebase
