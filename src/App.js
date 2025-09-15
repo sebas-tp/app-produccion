@@ -22,7 +22,29 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+
+
+// En tu componente App
+const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+
+const handleLoginChange = (e) => {
+    const { name, value } = e.target;
+    setLoginForm(prev => ({ ...prev, [name]: value }));
+};
+
+const handleLogin = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    try {
+        await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+    } catch (error) {
+        console.error("Error al iniciar sesión:", error.message);
+        setMessage("Error al iniciar sesión. Verifica tu correo y contraseña.");
+    }
+};
+
 // Componente reutilizable para los dropdowns con búsqueda
+
 const SearchableDropdown = ({ options, value, onChange, name, label }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -122,31 +144,36 @@ export default function App() {
 
     // --- Lógica de Autenticación de Firebase y Carga de Datos ---
     useEffect(() => {
-        const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser);
-            } else {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (currentUser) {
+            // Un usuario ha iniciado sesión.
+            // Ahora, busca su rol en Firestore.
+            try {
+                const userDocRef = doc(db, 'roles', currentUser.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    // Almacena el usuario y su rol en el estado
+                    setUser({ ...currentUser, rol: userData.rol });
+                } else {
+                    // Si el usuario no tiene rol, puedes asignarle uno por defecto, por ejemplo, 'operario'.
+                    // O simplemente no le permites el acceso a ciertas partes de la app.
+                    setUser({ ...currentUser, rol: 'operario' });
+                }
+            } catch (error) {
+                console.error("Error al obtener el rol del usuario:", error);
                 setUser(null);
             }
-            setLoading(false);
-        });
+        } else {
+            // No hay usuario autenticado.
+            setUser(null);
+        }
+        setLoading(false);
+    });
 
-        const authenticate = async () => {
-            try {
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (authError) {
-                console.error("Error al autenticarse automáticamente:", authError);
-                setMessage("Error al iniciar sesión automáticamente.");
-                setLoading(false);
-            }
-        };
-        authenticate();
-        return () => unsubscribeAuth();
-    }, []);
+    return () => unsubscribe();
+}, []);
 
     // Cargar registros de producción
     useEffect(() => {
@@ -694,42 +721,40 @@ export default function App() {
         );
     }
 
-    return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans flex flex-col items-center">
-            <style>
-                {`
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                body { font-family: 'Inter', sans-serif; }
-                .table-container { max-height: 80vh; overflow-y: auto; }
-                .scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-                .catalog-list ul {
-                    max-height: 250px;
-                    overflow-y: auto;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 0.375rem;
-                }
-                .dark .catalog-list ul {
-                     border: 1px solid #4b5563;
-                }
-                `}
-            </style>
+   // En la parte de renderizado principal
 
-            <div className="flex space-x-4 mb-8">
-                <button
-                    onClick={() => setShowAdminPanel(false)}
-                    className={`px-6 py-2 rounded-md font-bold transition-colors ${!showAdminPanel ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
-                >
-                    Panel de Operario
-                </button>
-                <button
-                    onClick={() => setShowAdminPanel(true)}
-                    className={`px-6 py-2 rounded-md font-bold transition-colors ${showAdminPanel ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
-                >
-                    Panel de Administrador
-                </button>
-            </div>
-
-            {showAdminPanel ? renderAdminPanel() : renderOperatorPanel()}
-        </div>
-    );
-}
+return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 ...">
+        {loading ? (
+            <p>Cargando...</p>
+        ) : (
+            // Si no hay usuario autenticado, muestra la pantalla de login
+            !user ? (
+                // Aquí va el JSX del formulario de login
+                // ...
+                <div className="container mx-auto max-w-sm p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+                    <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Iniciar Sesión</h1>
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Correo Electrónico</label>
+                            <input type="email" name="email" value={loginForm.email} onChange={handleLoginChange} required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contraseña</label>
+                            <input type="password" name="password" value={loginForm.password} onChange={handleLoginChange} required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100" />
+                        </div>
+                        <button type="submit" className="w-full py-2 px-4 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                            Ingresar
+                        </button>
+                    </form>
+                    {message && <div className="mt-4 text-red-500">{message}</div>}
+                </div>
+            ) : (
+                // Si hay un usuario, muestra el panel según su rol
+                user.rol === 'admin' ? renderAdminPanel() : renderOperatorPanel()
+            )
+        )}
+    </div>
+);
