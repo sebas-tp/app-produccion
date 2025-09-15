@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
 
 // Configuración de Firebase (variables de entorno de Vercel)
 const firebaseConfig = {
@@ -126,14 +126,15 @@ export default function App() {
                 try {
                     const userDocRef = doc(db, 'roles', currentUser.uid);
                     const userDoc = await getDoc(userDocRef);
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
-                        setUser({ ...currentUser, rol: userData.rol });
-                    } else {
-                        setUser({ ...currentUser, rol: 'operario' });
-                    }
+                    const userData = userDoc.exists() ? userDoc.data() : { rol: 'operario' };
+
+                    const profileDocRef = doc(db, 'userProfiles', currentUser.uid);
+                    const profileDoc = await getDoc(profileDocRef);
+                    const profileData = profileDoc.exists() ? profileDoc.data() : { name: currentUser.email };
+
+                    setUser({ ...currentUser, rol: userData.rol, name: profileData.name });
                 } catch (error) {
-                    console.error("Error al obtener el rol:", error);
+                    console.error("Error al obtener el rol o perfil:", error);
                     signOut(auth);
                 }
             } else {
@@ -145,29 +146,39 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // Cargar registros de producción
+    // Cargar registros de producción para el admin
     useEffect(() => {
-        if (!user || !showAdminPanel) return;
+        if (!user || user.rol !== 'admin') return;
 
-        const productionRecordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecords');
-        const q = query(productionRecordsRef);
+        const fetchAllRecords = async () => {
+            const allRecords = [];
+            const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
+            const userDocs = await getDocs(userRecordsCollectionRef);
 
-        const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-            try {
-                const fetchedRecords = [];
-                snapshot.forEach(doc => {
-                    fetchedRecords.push({ id: doc.id, ...doc.data() });
+            for (const userDoc of userDocs.docs) {
+                const dailyRecordsCollectionRef = collection(userRecordsCollectionRef, userDoc.id, 'dailyRecords');
+                const dailyRecords = await getDocs(dailyRecordsCollectionRef);
+                dailyRecords.forEach(doc => {
+                    const data = doc.data();
+                    data.records.forEach(record => {
+                        allRecords.push({
+                            ...record,
+                            id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // ID único para el frontend
+                            operarioId: userDoc.id,
+                            operarioName: data.operarioName
+                        });
+                    });
                 });
-                setRecords(fetchedRecords);
-            } catch (snapshotError) {
-                console.error("Error al obtener los registros de producción:", snapshotError);
             }
-        }, (error) => {
-            console.error("Error en la conexión a la base de datos:", error);
+            setRecords(allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+        };
+
+        const unsubscribe = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser'), (snapshot) => {
+            fetchAllRecords();
         });
 
-        return () => unsubscribeSnapshot();
-    }, [user, showAdminPanel]);
+        return () => unsubscribe();
+    }, [user]);
 
     // Cargar datos de puntos
     useEffect(() => {
@@ -287,8 +298,7 @@ export default function App() {
         setMessage('');
         setIsSubmitting(true);
         try {
-            const newRecord = {
-                operarioId: user.uid,
+            const record = {
                 orden: productionForm.orden,
                 sector: productionForm.sector,
                 operacion: productionForm.operacion,
@@ -302,11 +312,21 @@ export default function App() {
                 timestamp: new Date().toISOString()
             };
 
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'productionRecords'), newRecord);
+            const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
+            
+            // Usamos un get para obtener el documento actual
+            const dailyRecordDoc = await getDoc(dailyRecordDocRef);
+            
+            const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
+            const newRecordsList = [...existingRecords, record];
+            
+            // Usamos setDoc con merge para no sobreescribir si ya existe
+            await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
+
             setMessage("Registro de producción guardado con éxito.");
             setProductionForm({
                 orden: '',
-                sector: sectors[0] || '',
+                sector: '',
                 modeloProducto: '',
                 operacion: '',
                 cantidad: '',
@@ -421,7 +441,7 @@ export default function App() {
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel del Operario</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.name || user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -528,7 +548,7 @@ export default function App() {
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.name || user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -594,7 +614,7 @@ export default function App() {
                             </li>
                         ))
                     ) : (
-                        <li className="text-gray-500 dark:text-gray-400">No hay puntos de producción cargados.</li>
+                        <li className="px-4 py-2 text-gray-500 dark:text-gray-400">No hay puntos de producción cargados.</li>
                     )}
                 </ul>
             </div>
@@ -666,7 +686,7 @@ export default function App() {
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID Operario</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Operario</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Orden</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sector</th>
@@ -685,7 +705,7 @@ export default function App() {
                         ) : (
                             records.map((record) => (
                                 <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioId?.substring(0, 8) || 'N/A'}...</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioName || 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
