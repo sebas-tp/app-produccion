@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp, setLogLevel } from "firebase/app";
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc } from "firebase/firestore";
+import { initializeApp } from "firebase/app";
+import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 
 // Configuración de Firebase (variables de entorno de Vercel)
 const firebaseConfig = {
@@ -14,37 +14,13 @@ const firebaseConfig = {
 };
 
 const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
-const initialAuthToken = process.env.REACT_APP_INITIAL_AUTH_TOKEN || null;
 
 // Inicializar Firebase
-setLogLevel('debug');
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-
-
-// En tu componente App
-const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-
-const handleLoginChange = (e) => {
-    const { name, value } = e.target;
-    setLoginForm(prev => ({ ...prev, [name]: value }));
-};
-
-const handleLogin = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    try {
-        await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
-    } catch (error) {
-        console.error("Error al iniciar sesión:", error.message);
-        setMessage("Error al iniciar sesión. Verifica tu correo y contraseña.");
-    }
-};
-
 // Componente reutilizable para los dropdowns con búsqueda
-
 const SearchableDropdown = ({ options, value, onChange, name, label }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -141,39 +117,33 @@ export default function App() {
 
     const [catalogForm, setCatalogForm] = useState({ type: 'sectors', value: '' });
     const [editingCatalogId, setEditingCatalogId] = useState(null);
+    const [loginForm, setLoginForm] = useState({ email: '', password: '' });
 
     // --- Lógica de Autenticación de Firebase y Carga de Datos ---
     useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if (currentUser) {
-            // Un usuario ha iniciado sesión.
-            // Ahora, busca su rol en Firestore.
-            try {
-                const userDocRef = doc(db, 'roles', currentUser.uid);
-                const userDoc = await getDoc(userDocRef);
-
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    // Almacena el usuario y su rol en el estado
-                    setUser({ ...currentUser, rol: userData.rol });
-                } else {
-                    // Si el usuario no tiene rol, puedes asignarle uno por defecto, por ejemplo, 'operario'.
-                    // O simplemente no le permites el acceso a ciertas partes de la app.
-                    setUser({ ...currentUser, rol: 'operario' });
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser) {
+                try {
+                    const userDocRef = doc(db, 'roles', currentUser.uid);
+                    const userDoc = await getDoc(userDocRef);
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setUser({ ...currentUser, rol: userData.rol });
+                    } else {
+                        setUser({ ...currentUser, rol: 'operario' });
+                    }
+                } catch (error) {
+                    console.error("Error al obtener el rol:", error);
+                    signOut(auth);
                 }
-            } catch (error) {
-                console.error("Error al obtener el rol del usuario:", error);
+            } else {
                 setUser(null);
             }
-        } else {
-            // No hay usuario autenticado.
-            setUser(null);
-        }
-        setLoading(false);
-    });
+            setLoading(false);
+        });
 
-    return () => unsubscribe();
-}, []);
+        return () => unsubscribe();
+    }, []);
 
     // Cargar registros de producción
     useEffect(() => {
@@ -248,6 +218,27 @@ export default function App() {
             await signOut(auth);
         } catch (error) {
             console.error("Error al cerrar sesión:", error.message);
+        }
+    };
+    
+    // Lógica del login
+    const handleLoginChange = (e) => {
+        const { name, value } = e.target;
+        setLoginForm(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setMessage('');
+        setLoading(true);
+        try {
+            await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
+            setLoginForm({ email: '', password: '' });
+        } catch (error) {
+            console.error("Error al iniciar sesión:", error.message);
+            setMessage("Error al iniciar sesión. Verifica tu correo y contraseña.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -430,7 +421,7 @@ export default function App() {
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel del Operario</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.uid || 'Cargando...'}</span>
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -537,7 +528,7 @@ export default function App() {
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Registro de Producción
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -721,19 +712,30 @@ export default function App() {
         );
     }
 
-   // En la parte de renderizado principal
+    return (
+        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 font-sans flex flex-col items-center">
+            <style>
+                {`
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                body { font-family: 'Inter', sans-serif; }
+                .table-container { max-height: 80vh; overflow-y: auto; }
+                .scrollbar-hide::-webkit-scrollbar { display: none; } .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+                .catalog-list ul {
+                    max-height: 250px;
+                    overflow-y: auto;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0.375rem;
+                }
+                .dark .catalog-list ul {
+                    border: 1px solid #4b5563;
+                }
+                `}
+            </style>
 
-return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 ...">
-        {loading ? (
-            <p>Cargando...</p>
-        ) : (
-            // Si no hay usuario autenticado, muestra la pantalla de login
-            !user ? (
-                // Aquí va el JSX del formulario de login
-                // ...
+            {/* Si no hay usuario, muestra el formulario de login */}
+            {!user ? (
                 <div className="container mx-auto max-w-sm p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-                    <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4">Iniciar Sesión</h1>
+                    <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4 text-center">Iniciar Sesión</h1>
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Correo Electrónico</label>
@@ -749,12 +751,29 @@ return (
                             Ingresar
                         </button>
                     </form>
-                    {message && <div className="mt-4 text-red-500">{message}</div>}
+                    {message && <div className="mt-4 text-red-500 text-sm text-center">{message}</div>}
                 </div>
             ) : (
                 // Si hay un usuario, muestra el panel según su rol
-                user.rol === 'admin' ? renderAdminPanel() : renderOperatorPanel()
-            )
-        )}
-    </div>
-);
+                <>
+                    <div className="flex space-x-4 mb-8">
+                        <button
+                            onClick={() => setShowAdminPanel(false)}
+                            className={`px-6 py-2 rounded-md font-bold transition-colors ${!showAdminPanel ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
+                        >
+                            Panel de Operario
+                        </button>
+                        <button
+                            onClick={() => setShowAdminPanel(true)}
+                            className={`px-6 py-2 rounded-md font-bold transition-colors ${showAdminPanel ? 'bg-indigo-600 text-white' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'}`}
+                        >
+                            Panel de Administrador
+                        </button>
+                    </div>
+
+                    {showAdminPanel && user.rol === 'admin' ? renderAdminPanel() : renderOperatorPanel()}
+                </>
+            )}
+        </div>
+    );
+}
