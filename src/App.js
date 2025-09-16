@@ -130,7 +130,7 @@ export default function App() {
                     const userDoc = await getDoc(userDocRef);
                     const userData = userDoc.exists() ? userDoc.data() : { rol: 'operario' };
 
-                    const profileDocRef = doc(db, 'userProfiles', currentUser.uid);
+                    const profileDocRef = doc(db, 'userProfile', currentUser.uid);
                     const profileDoc = await getDoc(profileDocRef);
                     const profileData = profileDoc.exists() ? profileDoc.data() : { name: currentUser.email };
 
