@@ -1,3 +1,9 @@
+const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
+// --- Añade esta línea ---
+console.log("El valor de appId es:", appId);
+
+// ...el resto de tu código...
+
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
