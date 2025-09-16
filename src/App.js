@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
+import { getFirestore, collection, onSnapshot, query, setDoc, doc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
 
 // Firebase configuration (from Vercel environment variables)
 const firebaseConfig = {
@@ -130,7 +130,7 @@ export default function App() {
                     const userDoc = await getDoc(userDocRef);
                     const userData = userDoc.exists() ? userDoc.data() : { rol: 'operario' };
 
-                    const profileDocRef = doc(db, 'userProfile', currentUser.uid);
+                    const profileDocRef = doc(db, 'userProfile', currentUser.uid); // Changed to userProfile (singular)
                     const profileDoc = await getDoc(profileDocRef);
                     const profileData = profileDoc.exists() ? profileDoc.data() : { name: currentUser.email };
 
@@ -154,29 +154,36 @@ export default function App() {
 
         const fetchAllRecords = async () => {
             const allRecords = [];
-            const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
-            const userDocs = await getDocs(userRecordsCollectionRef);
+            try {
+                const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
+                const userDocs = await getDocs(userRecordsCollectionRef);
 
-            for (const userDoc of userDocs.docs) {
-                const dailyRecordsCollectionRef = collection(userRecordsCollectionRef, userDoc.id, 'dailyRecords');
-                const dailyRecords = await getDocs(dailyRecordsCollectionRef);
-                dailyRecords.forEach(doc => {
-                    const data = doc.data();
-                    data.records.forEach(record => {
-                        allRecords.push({
-                            ...record,
-                            id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // Unique ID for the frontend
-                            operarioId: userDoc.id,
-                            operarioName: data.operarioName
+                for (const userDoc of userDocs.docs) {
+                    const dailyRecordsCollectionRef = collection(userRecordsCollectionRef, userDoc.id, 'dailyRecords');
+                    const dailyRecords = await getDocs(dailyRecordsCollectionRef);
+                    dailyRecords.forEach(doc => {
+                        const data = doc.data();
+                        data.records.forEach(record => {
+                            allRecords.push({
+                                ...record,
+                                id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // Unique ID for the frontend
+                                operarioId: userDoc.id,
+                                operarioName: data.operarioName
+                            });
                         });
                     });
-                });
+                }
+                setRecords(allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+            } catch (error) {
+                console.error("Error fetching admin records:", error);
             }
-            setRecords(allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
         };
 
+        fetchAllRecords();
         const unsubscribe = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser'), (snapshot) => {
             fetchAllRecords();
+        }, (error) => {
+            console.error("Error in snapshot listener for admin records:", error);
         });
 
         return () => unsubscribe();
@@ -324,13 +331,11 @@ export default function App() {
 
             const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
             
-            // Get the current document to check for existing records
             const dailyRecordDoc = await getDoc(dailyRecordDocRef);
             
             const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
             const newRecordsList = [...existingRecords, record];
             
-            // Use setDoc with merge to append the new record
             await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
 
             setMessage("Record saved successfully.");
