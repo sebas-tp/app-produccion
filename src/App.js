@@ -156,6 +156,8 @@ export default function App() {
             const allRecords = [];
             try {
                 const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
+                // --- AÑADE ESTA LÍNEA AQUÍ ---
+                console.log("El administrador está buscando en la ruta:", userRecordsCollectionRef.path);
                 const userDocs = await getDocs(userRecordsCollectionRef);
                 // --- AÑADE ESTA LÍNEA AQUÍ ---
                 console.log("Cantidad de usuarios encontrados para leer registros:", userDocs.docs.length);
@@ -332,7 +334,8 @@ export default function App() {
             };
 
             const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
-            
+            // --- AÑADE ESTA LÍNEA AQUÍ ---
+            console.log("El operario está guardando en la ruta:", dailyRecordDocRef.path);
             const dailyRecordDoc = await getDoc(dailyRecordDocRef);
             
             const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
