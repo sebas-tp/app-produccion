@@ -157,6 +157,8 @@ export default function App() {
             try {
                 const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
                 const userDocs = await getDocs(userRecordsCollectionRef);
+                // --- AÑADE ESTA LÍNEA AQUÍ ---
+                console.log("Cantidad de usuarios encontrados para leer registros:", userDocs.docs.length);
 
                 for (const userDoc of userDocs.docs) {
                     const dailyRecordsCollectionRef = collection(userRecordsCollectionRef, userDoc.id, 'dailyRecords');
