@@ -3,24 +3,24 @@ import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
 
-// Configuración de Firebase (variables de entorno de Vercel)
+// Firebase configuration (from Vercel environment variables)
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
+    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
 const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
 
-// Inicializar Firebase
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Componente reutilizable para los dropdowns con búsqueda
+// Reusable component for searchable dropdowns
 const SearchableDropdown = ({ options, value, onChange, name, label }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -84,7 +84,7 @@ const SearchableDropdown = ({ options, value, onChange, name, label }) => {
 };
 
 export default function App() {
-    // --- Estados de la aplicación ---
+    // --- Application states ---
     const [user, setUser] = useState(null);
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,7 +104,9 @@ export default function App() {
         cantidad: '',
         puntos: 0,
         fecha: new Date().toISOString().split('T')[0],
-        observaciones: ''
+        observaciones: '',
+        horarioInicio: '', // Added this field
+        horarioFin: '' // Added this field
     });
     const [taskStartTime, setTaskStartTime] = useState(null);
     const [pointsForm, setPointsForm] = useState({
@@ -119,7 +121,7 @@ export default function App() {
     const [editingCatalogId, setEditingCatalogId] = useState(null);
     const [loginForm, setLoginForm] = useState({ email: '', password: '' });
 
-    // --- Lógica de Autenticación de Firebase y Carga de Datos ---
+    // --- Firebase Authentication and Data Loading Logic ---
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
@@ -134,7 +136,7 @@ export default function App() {
 
                     setUser({ ...currentUser, rol: userData.rol, name: profileData.name });
                 } catch (error) {
-                    console.error("Error al obtener el rol o perfil:", error);
+                    console.error("Error getting role or profile:", error);
                     signOut(auth);
                 }
             } else {
@@ -146,7 +148,7 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // Cargar registros de producción para el admin
+    // Load production records for the admin
     useEffect(() => {
         if (!user || user.rol !== 'admin') return;
 
@@ -163,7 +165,7 @@ export default function App() {
                     data.records.forEach(record => {
                         allRecords.push({
                             ...record,
-                            id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // ID único para el frontend
+                            id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // Unique ID for the frontend
                             operarioId: userDoc.id,
                             operarioName: data.operarioName
                         });
@@ -180,7 +182,7 @@ export default function App() {
         return () => unsubscribe();
     }, [user]);
 
-    // Cargar datos de puntos
+    // Load points data
     useEffect(() => {
         const pointsRef = collection(db, 'artifacts', appId, 'public', 'data', 'pointsData');
         const unsubscribePoints = onSnapshot(pointsRef, (snapshot) => {
@@ -191,15 +193,15 @@ export default function App() {
                 });
                 setPointsData(fetchedPoints);
             } catch (snapshotError) {
-                console.error("Error al obtener los datos de puntos:", snapshotError);
+                console.error("Error getting points data:", snapshotError);
             }
         }, (error) => {
-            console.error("Error en la conexión a la base de datos de puntos:", error);
+            console.error("Error connecting to points database:", error);
         });
         return () => unsubscribePoints();
     }, []);
 
-    // Cargar los catálogos de datos
+    // Load catalog data
     useEffect(() => {
         const unsubscribeSectors = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sectors'), (snapshot) => {
             const list = snapshot.docs.map(doc => doc.data().name);
@@ -228,11 +230,11 @@ export default function App() {
         try {
             await signOut(auth);
         } catch (error) {
-            console.error("Error al cerrar sesión:", error.message);
+            console.error("Error signing out:", error.message);
         }
     };
-    
-    // Lógica del login
+
+    // Login logic
     const handleLoginChange = (e) => {
         const { name, value } = e.target;
         setLoginForm(prev => ({ ...prev, [name]: value }));
@@ -246,19 +248,19 @@ export default function App() {
             await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
             setLoginForm({ email: '', password: '' });
         } catch (error) {
-            console.error("Error al iniciar sesión:", error.message);
+            console.error("Error signing in:", error.message);
             setMessage("Error al iniciar sesión. Verifica tu correo y contraseña.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- Lógica del Panel del Operario ---
+    // --- Operator Panel Logic ---
     const handleProductionFormChange = (e) => {
         const { name, value } = e.target;
         setProductionForm(prev => {
             const newForm = { ...prev, [name]: value };
-            // Calcular puntos automáticamente
+            // Calculate points automatically
             const pointsEntry = pointsData.find(p => p.sector === newForm.sector && p.modeloProducto === newForm.modeloProducto && p.operacion === newForm.operacion);
             const points = pointsEntry ? pointsEntry.puntos : 0;
             newForm.puntos = points * (Number(newForm.cantidad) || 0);
@@ -268,12 +270,12 @@ export default function App() {
 
     const handleStartTask = () => {
         setTaskStartTime(new Date());
-        setMessage('Tarea iniciada. Presiona "Fin de Tarea" al terminar.');
+        setMessage('Task started. Press "End Task" when finished.');
     };
 
     const handleEndTask = () => {
         if (!taskStartTime) {
-            setMessage('Error: Tarea no iniciada.');
+            setMessage('Error: Task not started.');
             return;
         }
         const endTime = new Date();
@@ -290,13 +292,21 @@ export default function App() {
         }));
 
         setTaskStartTime(null);
-        setMessage(`Tarea finalizada. Duración: ${durationInMinutes} minutos. Ahora completa y envía el formulario.`);
+        setMessage(`Task finished. Duration: ${durationInMinutes} minutes. Now complete and submit the form.`);
     };
 
     const handleProductionSubmit = async (e) => {
         e.preventDefault();
         setMessage('');
         setIsSubmitting(true);
+
+        // Check for required fields before submitting
+        if (!productionForm.horarioInicio || !productionForm.horarioFin) {
+            setMessage("Error: Debes iniciar y finalizar la tarea antes de guardar el registro.");
+            setIsSubmitting(false);
+            return;
+        }
+
         try {
             const record = {
                 orden: productionForm.orden,
@@ -314,16 +324,16 @@ export default function App() {
 
             const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
             
-            // Usamos un get para obtener el documento actual
+            // Get the current document to check for existing records
             const dailyRecordDoc = await getDoc(dailyRecordDocRef);
             
             const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
             const newRecordsList = [...existingRecords, record];
             
-            // Usamos setDoc con merge para no sobreescribir si ya existe
+            // Use setDoc with merge to append the new record
             await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
 
-            setMessage("Registro de producción guardado con éxito.");
+            setMessage("Record saved successfully.");
             setProductionForm({
                 orden: '',
                 sector: '',
@@ -332,17 +342,19 @@ export default function App() {
                 cantidad: '',
                 puntos: 0,
                 fecha: new Date().toISOString().split('T')[0],
-                observaciones: ''
+                observaciones: '',
+                horarioInicio: '', // Resetting the field to an empty string
+                horarioFin: '' // Resetting the field to an empty string
             });
         } catch (error) {
-            console.error("Error al guardar el registro:", error.message);
-            setMessage("Error al guardar el registro: " + error.message);
+            console.error("Error saving the record:", error.message);
+            setMessage("Error saving the record: " + error.message);
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    // --- Lógica del Panel de Administración para Puntos ---
+    // --- Admin Panel Logic for Points ---
     const handlePointsFormChange = (e) => {
         const { name, value } = e.target;
         setPointsForm(prev => ({ ...prev, [name]: value }));
@@ -351,7 +363,7 @@ export default function App() {
     const handlePointsSubmit = async (e) => {
         e.preventDefault();
         if (!pointsForm.sector || !pointsForm.modeloProducto || !pointsForm.operacion || pointsForm.puntos === '') {
-            setMessage('Por favor, completa todos los campos del formulario de puntos.');
+            setMessage('Please fill in all points form fields.');
             return;
         }
         setMessage('');
@@ -364,11 +376,11 @@ export default function App() {
                 operacion: pointsForm.operacion,
                 puntos: Number(pointsForm.puntos)
             });
-            setMessage("Puntos de producción guardados/actualizados con éxito.");
+            setMessage("Production points saved/updated successfully.");
             setPointsForm({ id: '', sector: sectors[0] || '', modeloProducto: '', operacion: '', puntos: '' });
         } catch (error) {
-            console.error("Error al guardar los puntos:", error);
-            setMessage("Error al guardar los puntos: " + error.message);
+            console.error("Error saving points:", error);
+            setMessage("Error saving points: " + error.message);
         }
     };
 
@@ -380,20 +392,20 @@ export default function App() {
             operacion: point.operacion,
             puntos: point.puntos
         });
-        setMessage('Editando puntos. Modifica el formulario y haz clic en Guardar.');
+        setMessage('Editing points. Modify the form and click Save.');
     };
 
     const handleDeletePoints = async (id) => {
         try {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pointsData', id));
-            setMessage("Puntos eliminados con éxito.");
+            setMessage("Points deleted successfully.");
         } catch (error) {
-            console.error("Error al eliminar los puntos:", error);
-            setMessage("Error al eliminar los puntos: " + error.message);
+            console.error("Error deleting points:", error);
+            setMessage("Error deleting points: " + error.message);
         }
     };
 
-    // --- Lógica de Gestión de Catálogos ---
+    // --- Catalog Management Logic ---
     const handleCatalogFormChange = (e) => {
         const { name, value } = e.target;
         setCatalogForm(prev => ({ ...prev, [name]: value }));
@@ -404,18 +416,18 @@ export default function App() {
         setMessage('');
         const { type, value } = catalogForm;
         if (!value.trim()) {
-            setMessage('El campo no puede estar vacío.');
+            setMessage('The field cannot be empty.');
             return;
         }
         try {
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', type, value.trim());
             await setDoc(docRef, { name: value.trim() });
-            setMessage(`"${value.trim()}" agregado/actualizado en el catálogo de ${type}.`);
+            setMessage(`"${value.trim()}" added/updated to the ${type} catalog.`);
             setCatalogForm({ ...catalogForm, value: '' });
             setEditingCatalogId(null);
         } catch (error) {
-            console.error("Error al guardar en el catálogo:", error);
-            setMessage("Error al guardar en el catálogo: " + error.message);
+            console.error("Error saving to catalog:", error);
+            setMessage("Error saving to catalog: " + error.message);
         }
     };
 
@@ -427,14 +439,14 @@ export default function App() {
     const handleDeleteCatalog = async (type, id) => {
         try {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', type, id));
-            setMessage(`Elemento eliminado del catálogo de ${type}.`);
+            setMessage(`Item deleted from the ${type} catalog.`);
         } catch (error) {
-            console.error("Error al eliminar del catálogo:", error);
-            setMessage("Error al eliminar del catálogo: " + error.message);
+            console.error("Error deleting from catalog:", error);
+            setMessage("Error deleting from catalog: " + error.message);
         }
     };
 
-    // --- Renderizado de Paneles ---
+    // --- Panel Rendering ---
     const renderOperatorPanel = () => (
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
@@ -723,7 +735,7 @@ export default function App() {
         </div>
     );
 
-    // --- Renderizado Principal ---
+    // --- Main Rendering ---
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -752,7 +764,7 @@ export default function App() {
                 `}
             </style>
 
-            {/* Si no hay usuario, muestra el formulario de login */}
+            {/* If no user, show login form */}
             {!user ? (
                 <div className="container mx-auto max-w-sm p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4 text-center">Iniciar Sesión</h1>
@@ -774,7 +786,7 @@ export default function App() {
                     {message && <div className="mt-4 text-red-500 text-sm text-center">{message}</div>}
                 </div>
             ) : (
-                // Si hay un usuario, muestra el panel según su rol
+                // If there's a user, show the panel based on their role
                 <>
                     <div className="flex space-x-4 mb-8">
                         <button
