@@ -1,32 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
-import { getFirestore, collection, onSnapshot, query, setDoc, doc, deleteDoc, getDoc, getDocs } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 
-// Firebase configuration (from Vercel environment variables)
+// Configuración de Firebase (variables de entorno de Vercel)
 const firebaseConfig = {
-    apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-    authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.REACT_APP_FIREBASE_APP_ID
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
 const appId = process.env.REACT_APP_APP_ID || 'default-app-id';
 
-
-// --- Añade esta línea ---
-console.log("El valor de appId es:", appId);
-
-// ...el resto de tu código...
-
-// Initialize Firebase
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Reusable component for searchable dropdowns
+// Componente reutilizable para los dropdowns con búsqueda
 const SearchableDropdown = ({ options, value, onChange, name, label }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -90,7 +84,7 @@ const SearchableDropdown = ({ options, value, onChange, name, label }) => {
 };
 
 export default function App() {
-    // --- Application states ---
+    // --- Estados de la aplicación ---
     const [user, setUser] = useState(null);
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,9 +104,7 @@ export default function App() {
         cantidad: '',
         puntos: 0,
         fecha: new Date().toISOString().split('T')[0],
-        observaciones: '',
-        horarioInicio: '', // Added this field
-        horarioFin: '' // Added this field
+        observaciones: ''
     });
     const [taskStartTime, setTaskStartTime] = useState(null);
     const [pointsForm, setPointsForm] = useState({
@@ -126,23 +118,23 @@ export default function App() {
     const [catalogForm, setCatalogForm] = useState({ type: 'sectors', value: '' });
     const [editingCatalogId, setEditingCatalogId] = useState(null);
     const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+    const [selectedOperarioId, setSelectedOperarioId] = useState('');
 
-    // --- Firebase Authentication and Data Loading Logic ---
+    // --- Lógica de Autenticación de Firebase y Carga de Datos ---
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 try {
                     const userDocRef = doc(db, 'roles', currentUser.uid);
                     const userDoc = await getDoc(userDocRef);
-                    const userData = userDoc.exists() ? userDoc.data() : { rol: 'operario' };
-
-                    const profileDocRef = doc(db, 'userProfile', currentUser.uid); // Changed to userProfile (singular)
-                    const profileDoc = await getDoc(profileDocRef);
-                    const profileData = profileDoc.exists() ? profileDoc.data() : { name: currentUser.email };
-
-                    setUser({ ...currentUser, rol: userData.rol, name: profileData.name });
+                    if (userDoc.exists()) {
+                        const userData = userDoc.data();
+                        setUser({ ...currentUser, rol: userData.rol });
+                    } else {
+                        setUser({ ...currentUser, rol: 'operario' });
+                    }
                 } catch (error) {
-                    console.error("Error getting role or profile:", error);
+                    console.error("Error al obtener el rol:", error);
                     signOut(auth);
                 }
             } else {
@@ -154,52 +146,31 @@ export default function App() {
         return () => unsubscribe();
     }, []);
 
-    // Load production records for the admin
+    // Cargar registros de producción
     useEffect(() => {
-        if (!user || user.rol !== 'admin') return;
+        if (!user || !showAdminPanel) return;
 
-        const fetchAllRecords = async () => {
-            const allRecords = [];
+        const productionRecordsRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecords');
+        const q = query(productionRecordsRef);
+
+        const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
             try {
-                const userRecordsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser');
-                // --- AÑADE ESTA LÍNEA AQUÍ ---
-                console.log("El administrador está buscando en la ruta:", userRecordsCollectionRef.path);
-                const userDocs = await getDocs(userRecordsCollectionRef);
-                // --- AÑADE ESTA LÍNEA AQUÍ ---
-                console.log("Cantidad de usuarios encontrados para leer registros:", userDocs.docs.length);
-
-                for (const userDoc of userDocs.docs) {
-                    const dailyRecordsCollectionRef = collection(userRecordsCollectionRef, userDoc.id, 'dailyRecords');
-                    const dailyRecords = await getDocs(dailyRecordsCollectionRef);
-                    dailyRecords.forEach(doc => {
-                        const data = doc.data();
-                        data.records.forEach(record => {
-                            allRecords.push({
-                                ...record,
-                                id: `${userDoc.id}-${doc.id}-${record.timestamp}`, // Unique ID for the frontend
-                                operarioId: userDoc.id,
-                                operarioName: data.operarioName
-                            });
-                        });
-                    });
-                }
-                setRecords(allRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
-            } catch (error) {
-                console.error("Error fetching admin records:", error);
+                const fetchedRecords = [];
+                snapshot.forEach(doc => {
+                    fetchedRecords.push({ id: doc.id, ...doc.data() });
+                });
+                setRecords(fetchedRecords);
+            } catch (snapshotError) {
+                console.error("Error al obtener los registros de producción:", snapshotError);
             }
-        };
-
-        fetchAllRecords();
-        const unsubscribe = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser'), (snapshot) => {
-            fetchAllRecords();
         }, (error) => {
-            console.error("Error in snapshot listener for admin records:", error);
+            console.error("Error en la conexión a la base de datos:", error);
         });
 
-        return () => unsubscribe();
-    }, [user]);
+        return () => unsubscribeSnapshot();
+    }, [user, showAdminPanel]);
 
-    // Load points data
+    // Cargar datos de puntos
     useEffect(() => {
         const pointsRef = collection(db, 'artifacts', appId, 'public', 'data', 'pointsData');
         const unsubscribePoints = onSnapshot(pointsRef, (snapshot) => {
@@ -210,15 +181,15 @@ export default function App() {
                 });
                 setPointsData(fetchedPoints);
             } catch (snapshotError) {
-                console.error("Error getting points data:", snapshotError);
+                console.error("Error al obtener los datos de puntos:", snapshotError);
             }
         }, (error) => {
-            console.error("Error connecting to points database:", error);
+            console.error("Error en la conexión a la base de datos de puntos:", error);
         });
         return () => unsubscribePoints();
     }, []);
 
-    // Load catalog data
+    // Cargar los catálogos de datos
     useEffect(() => {
         const unsubscribeSectors = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sectors'), (snapshot) => {
             const list = snapshot.docs.map(doc => doc.data().name);
@@ -247,11 +218,11 @@ export default function App() {
         try {
             await signOut(auth);
         } catch (error) {
-            console.error("Error signing out:", error.message);
+            console.error("Error al cerrar sesión:", error.message);
         }
     };
-
-    // Login logic
+    
+    // Lógica del login
     const handleLoginChange = (e) => {
         const { name, value } = e.target;
         setLoginForm(prev => ({ ...prev, [name]: value }));
@@ -265,19 +236,19 @@ export default function App() {
             await signInWithEmailAndPassword(auth, loginForm.email, loginForm.password);
             setLoginForm({ email: '', password: '' });
         } catch (error) {
-            console.error("Error signing in:", error.message);
+            console.error("Error al iniciar sesión:", error.message);
             setMessage("Error al iniciar sesión. Verifica tu correo y contraseña.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- Operator Panel Logic ---
+    // --- Lógica del Panel del Operario ---
     const handleProductionFormChange = (e) => {
         const { name, value } = e.target;
         setProductionForm(prev => {
             const newForm = { ...prev, [name]: value };
-            // Calculate points automatically
+            // Calcular puntos automáticamente
             const pointsEntry = pointsData.find(p => p.sector === newForm.sector && p.modeloProducto === newForm.modeloProducto && p.operacion === newForm.operacion);
             const points = pointsEntry ? pointsEntry.puntos : 0;
             newForm.puntos = points * (Number(newForm.cantidad) || 0);
@@ -287,12 +258,12 @@ export default function App() {
 
     const handleStartTask = () => {
         setTaskStartTime(new Date());
-        setMessage('Task started. Press "End Task" when finished.');
+        setMessage('Tarea iniciada. Presiona "Fin de Tarea" al terminar.');
     };
 
     const handleEndTask = () => {
         if (!taskStartTime) {
-            setMessage('Error: Task not started.');
+            setMessage('Error: Tarea no iniciada.');
             return;
         }
         const endTime = new Date();
@@ -309,67 +280,50 @@ export default function App() {
         }));
 
         setTaskStartTime(null);
-        setMessage(`Task finished. Duration: ${durationInMinutes} minutes. Now complete and submit the form.`);
+        setMessage(`Tarea finalizada. Duración: ${durationInMinutes} minutos. Ahora completa y envía el formulario.`);
     };
 
     const handleProductionSubmit = async (e) => {
-    e.preventDefault();
-    setMessage('');
-    setIsSubmitting(true);
+        e.preventDefault();
+        setMessage('');
+        setIsSubmitting(true);
+        try {
+            const newRecord = {
+                operarioId: user.uid,
+                orden: productionForm.orden,
+                sector: productionForm.sector,
+                operacion: productionForm.operacion,
+                fecha: productionForm.fecha,
+                horarioInicio: productionForm.horarioInicio,
+                horarioFin: productionForm.horarioFin,
+                modeloProducto: productionForm.modeloProducto,
+                cantidad: Number(productionForm.cantidad),
+                puntos: Number(productionForm.puntos),
+                observaciones: productionForm.observaciones,
+                timestamp: new Date().toISOString()
+            };
 
-    if (!productionForm.horarioInicio || !productionForm.horarioFin) {
-        setMessage("Error: Debes iniciar y finalizar la tarea antes de guardar el registro.");
-        setIsSubmitting(false);
-        return;
-    }
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'productionRecords'), newRecord);
+            setMessage("Registro de producción guardado con éxito.");
+            setProductionForm({
+                orden: '',
+                sector: sectors[0] || '',
+                modeloProducto: '',
+                operacion: '',
+                cantidad: '',
+                puntos: 0,
+                fecha: new Date().toISOString().split('T')[0],
+                observaciones: ''
+            });
+        } catch (error) {
+            console.error("Error al guardar el registro:", error.message);
+            setMessage("Error al guardar el registro: " + error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-    try {
-        const record = {
-            orden: productionForm.orden,
-            sector: productionForm.sector,
-            operacion: productionForm.operacion,
-            fecha: productionForm.fecha,
-            horarioInicio: productionForm.horarioInicio,
-            horarioFin: productionForm.horarioFin,
-            modeloProducto: productionForm.modeloProducto,
-            cantidad: Number(productionForm.cantidad),
-            puntos: Number(productionForm.puntos),
-            observaciones: productionForm.observaciones,
-            timestamp: new Date().toISOString()
-        };
-
-        const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
-        console.log("Referencia de documento para guardar:", dailyRecordDocRef.path);
-
-        const dailyRecordDoc = await getDoc(dailyRecordDocRef);
-        
-        const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
-        const newRecordsList = [...existingRecords, record];
-        
-        await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
-
-        setMessage("Record saved successfully.");
-        setProductionForm({
-            orden: '',
-            sector: '',
-            modeloProducto: '',
-            operacion: '',
-            cantidad: '',
-            puntos: 0,
-            fecha: new Date().toISOString().split('T')[0],
-            observaciones: '',
-            horarioInicio: '',
-            horarioFin: ''
-        });
-    } catch (error) {
-        console.error("Error saving the record:", error.message);
-        setMessage("Error saving the record: " + error.message);
-    } finally {
-        setIsSubmitting(false);
-    }
-};
-
-    // --- Admin Panel Logic for Points ---
+    // --- Lógica del Panel de Administración para Puntos ---
     const handlePointsFormChange = (e) => {
         const { name, value } = e.target;
         setPointsForm(prev => ({ ...prev, [name]: value }));
@@ -378,7 +332,7 @@ export default function App() {
     const handlePointsSubmit = async (e) => {
         e.preventDefault();
         if (!pointsForm.sector || !pointsForm.modeloProducto || !pointsForm.operacion || pointsForm.puntos === '') {
-            setMessage('Please fill in all points form fields.');
+            setMessage('Por favor, completa todos los campos del formulario de puntos.');
             return;
         }
         setMessage('');
@@ -391,11 +345,11 @@ export default function App() {
                 operacion: pointsForm.operacion,
                 puntos: Number(pointsForm.puntos)
             });
-            setMessage("Production points saved/updated successfully.");
+            setMessage("Puntos de producción guardados/actualizados con éxito.");
             setPointsForm({ id: '', sector: sectors[0] || '', modeloProducto: '', operacion: '', puntos: '' });
         } catch (error) {
-            console.error("Error saving points:", error);
-            setMessage("Error saving points: " + error.message);
+            console.error("Error al guardar los puntos:", error);
+            setMessage("Error al guardar los puntos: " + error.message);
         }
     };
 
@@ -407,20 +361,20 @@ export default function App() {
             operacion: point.operacion,
             puntos: point.puntos
         });
-        setMessage('Editing points. Modify the form and click Save.');
+        setMessage('Editando puntos. Modifica el formulario y haz clic en Guardar.');
     };
 
     const handleDeletePoints = async (id) => {
         try {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'pointsData', id));
-            setMessage("Points deleted successfully.");
+            setMessage("Puntos eliminados con éxito.");
         } catch (error) {
-            console.error("Error deleting points:", error);
-            setMessage("Error deleting points: " + error.message);
+            console.error("Error al eliminar los puntos:", error);
+            setMessage("Error al eliminar los puntos: " + error.message);
         }
     };
 
-    // --- Catalog Management Logic ---
+    // --- Lógica de Gestión de Catálogos ---
     const handleCatalogFormChange = (e) => {
         const { name, value } = e.target;
         setCatalogForm(prev => ({ ...prev, [name]: value }));
@@ -431,18 +385,18 @@ export default function App() {
         setMessage('');
         const { type, value } = catalogForm;
         if (!value.trim()) {
-            setMessage('The field cannot be empty.');
+            setMessage('El campo no puede estar vacío.');
             return;
         }
         try {
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', type, value.trim());
             await setDoc(docRef, { name: value.trim() });
-            setMessage(`"${value.trim()}" added/updated to the ${type} catalog.`);
+            setMessage(`"${value.trim()}" agregado/actualizado en el catálogo de ${type}.`);
             setCatalogForm({ ...catalogForm, value: '' });
             setEditingCatalogId(null);
         } catch (error) {
-            console.error("Error saving to catalog:", error);
-            setMessage("Error saving to catalog: " + error.message);
+            console.error("Error al guardar en el catálogo:", error);
+            setMessage("Error al guardar en el catálogo: " + error.message);
         }
     };
 
@@ -454,21 +408,21 @@ export default function App() {
     const handleDeleteCatalog = async (type, id) => {
         try {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', type, id));
-            setMessage(`Item deleted from the ${type} catalog.`);
+            setMessage(`Elemento eliminado del catálogo de ${type}.`);
         } catch (error) {
-            console.error("Error deleting from catalog:", error);
-            setMessage("Error deleting from catalog: " + error.message);
+            console.error("Error al eliminar del catálogo:", error);
+            setMessage("Error al eliminar del catálogo: " + error.message);
         }
     };
 
-    // --- Panel Rendering ---
+    // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel del Operario</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.name || user?.email || 'Cargando...'}</span>
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -569,13 +523,19 @@ export default function App() {
         </div>
     );
 
-    const renderAdminPanel = () => (
+    // ...existing code...
+
+const renderAdminPanel = () => {
+    // Obtener lista única de IDs de operarios
+    const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
+
+    return (
         <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
             <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
                 <div>
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.name || user?.email || 'Cargando...'}</span>
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
                     </p>
                 </div>
                 <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
@@ -586,134 +546,29 @@ export default function App() {
             {message && <div className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-4 rounded-md mb-6">{message}</div>}
 
             <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Puntos de Producción</h2>
-            <form onSubmit={handlePointsSubmit} className="space-y-4 mb-8 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sector</label>
-                        <select name="sector" value={pointsForm.sector} onChange={handlePointsFormChange} required
-                            className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
-                            <option value="">Selecciona un sector</option>
-                            {sectors.map(sector => (<option key={sector} value={sector}>{sector}</option>))}
-                        </select>
-                    </div>
-                    <SearchableDropdown
-                        options={products}
-                        value={pointsForm.modeloProducto}
-                        onChange={handlePointsFormChange}
-                        name="modeloProducto"
-                        label="Modelo del Producto"
-                    />
-                    <SearchableDropdown
-                        options={operations}
-                        value={pointsForm.operacion}
-                        onChange={handlePointsFormChange}
-                        name="operacion"
-                        label="Operación"
-                    />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Puntos</label>
-                        <input type="number" name="puntos" value={pointsForm.puntos} onChange={handlePointsFormChange} step="0.01" required
-                            className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
-                    </div>
-                    <div className="flex items-end">
-                        <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors">
-                            {pointsForm.id ? 'Actualizar Puntos' : 'Añadir Puntos'}
-                        </button>
-                    </div>
-                </div>
-            </form>
-
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Puntos de Producción Cargados</h2>
-            <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
-                <ul className="space-y-2">
-                    {pointsData.length > 0 ? (
-                        pointsData.map(point => (
-                            <li key={point.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
-                                <span className="text-sm">
-                                    <span className="font-bold">{point.sector}</span> + <span className="font-bold">{point.modeloProducto}</span> + <span className="font-bold">{point.operacion}</span> = <span className="text-indigo-600 dark:text-indigo-400 font-bold">{point.puntos}</span>
-                                </span>
-                                <div>
-                                    <button onClick={() => handleEditPoints(point)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
-                                    <button onClick={() => handleDeletePoints(point.id)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
-                                </div>
-                            </li>
-                        ))
-                    ) : (
-                        <li className="px-4 py-2 text-gray-500 dark:text-gray-400">No hay puntos de producción cargados.</li>
-                    )}
-                </ul>
-            </div>
-
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Catálogos</h2>
-            <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
-                <form onSubmit={handleCatalogSubmit} className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                    <select name="type" value={catalogForm.type} onChange={handleCatalogFormChange}
-                        className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
-                        <option value="sectors">Sectores</option>
-                        <option value="products">Modelos de Producto</option>
-                        <option value="operations">Operaciones</option>
-                    </select>
-                    <input type="text" name="value" value={catalogForm.value} onChange={handleCatalogFormChange} placeholder="Escribe para añadir o editar"
-                        className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
-                    <button type="submit" className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
-                        {editingCatalogId ? 'Actualizar' : 'Añadir'}
-                    </button>
-                </form>
-
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="catalog-list">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Sectores</h3>
-                        <ul className="space-y-2">
-                            {sectors.map(item => (
-                                <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
-                                    <span className="text-sm">{item}</span>
-                                    <div>
-                                        <button onClick={() => handleEditCatalog('sectors', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
-                                        <button onClick={() => handleDeleteCatalog('sectors', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    <div className="catalog-list">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Modelos de Producto</h3>
-                        <ul className="space-y-2">
-                            {products.map(item => (
-                                <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
-                                    <span className="text-sm">{item}</span>
-                                    <div>
-                                        <button onClick={() => handleEditCatalog('products', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
-                                        <button onClick={() => handleDeleteCatalog('products', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    <div className="catalog-list">
-                        <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Operaciones</h3>
-                        <ul className="space-y-2">
-                            {operations.map(item => (
-                                <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
-                                    <span className="text-sm">{item}</span>
-                                    <div>
-                                        <button onClick={() => handleEditCatalog('operations', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
-                                        <button onClick={() => handleDeleteCatalog('operations', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            </div>
+            {/* ...formulario de puntos y catálogos... */}
+            {/* ...catálogos... */}
 
             <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
+            {/* Filtro por operario */}
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
+                <select
+                    value={selectedOperarioId}
+                    onChange={e => setSelectedOperarioId(e.target.value)}
+                    className="w-full md:w-1/3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                >
+                    <option value="">Todos</option>
+                    {operarioIds.map(id => (
+                        <option key={id} value={id}>{id}</option>
+                    ))}
+                </select>
+            </div>
             <div className="table-container scrollbar-hide">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
                         <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Operario</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID Operario</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Orden</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sector</th>
@@ -730,27 +585,31 @@ export default function App() {
                                 <td colSpan="9" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No hay registros de producción.</td>
                             </tr>
                         ) : (
-                            records.map((record) => (
-                                <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioName || 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.modeloProducto}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.operacion}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.cantidad}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.puntos}</td>
-                                    <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{record.observaciones || 'N/A'}</td>
-                                </tr>
-                            ))
+                            records
+                                .filter(record => !selectedOperarioId || record.operarioId === selectedOperarioId)
+                                .map((record) => (
+                                    <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioId?.substring(0, 8) || 'N/A'}...</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.modeloProducto}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.operacion}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.cantidad}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.puntos}</td>
+                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{record.observaciones || 'N/A'}</td>
+                                    </tr>
+                                ))
                         )}
                     </tbody>
                 </table>
             </div>
         </div>
     );
+};
+// ...existing code...
 
-    // --- Main Rendering ---
+    // --- Renderizado Principal ---
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
@@ -779,7 +638,7 @@ export default function App() {
                 `}
             </style>
 
-            {/* If no user, show login form */}
+            {/* Si no hay usuario, muestra el formulario de login */}
             {!user ? (
                 <div className="container mx-auto max-w-sm p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
                     <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mb-4 text-center">Iniciar Sesión</h1>
@@ -801,7 +660,7 @@ export default function App() {
                     {message && <div className="mt-4 text-red-500 text-sm text-center">{message}</div>}
                 </div>
             ) : (
-                // If there's a user, show the panel based on their role
+                // Si hay un usuario, muestra el panel según su rol
                 <>
                     <div className="flex space-x-4 mb-8">
                         <button
