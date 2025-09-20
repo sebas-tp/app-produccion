@@ -523,91 +523,208 @@ export default function App() {
         </div>
     );
 
-    // ...existing code...
+    // --- Panel de Administración con filtro por operario ---
+    const renderAdminPanel = () => {
+        // Obtener lista única de IDs de operarios
+        const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
 
-const renderAdminPanel = () => {
-    // Obtener lista única de IDs de operarios
-    const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
+        return (
+            <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
+                <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
+                    <div>
+                        <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
+                        </p>
+                    </div>
+                    <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
+                        Cerrar Sesión
+                    </button>
+                </header>
 
-    return (
-        <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
-            <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
-                <div>
-                    <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
-                    </p>
-                </div>
-                <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
-                    Cerrar Sesión
-                </button>
-            </header>
+                {message && <div className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-4 rounded-md mb-6">{message}</div>}
 
-            {message && <div className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-4 rounded-md mb-6">{message}</div>}
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Puntos de Producción</h2>
+                <form onSubmit={handlePointsSubmit} className="space-y-4 mb-8 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sector</label>
+                            <select name="sector" value={pointsForm.sector} onChange={handlePointsFormChange} required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
+                                <option value="">Selecciona un sector</option>
+                                {sectors.map(sector => (<option key={sector} value={sector}>{sector}</option>))}
+                            </select>
+                        </div>
+                        <SearchableDropdown
+                            options={products}
+                            value={pointsForm.modeloProducto}
+                            onChange={handlePointsFormChange}
+                            name="modeloProducto"
+                            label="Modelo del Producto"
+                        />
+                        <SearchableDropdown
+                            options={operations}
+                            value={pointsForm.operacion}
+                            onChange={handlePointsFormChange}
+                            name="operacion"
+                            label="Operación"
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Puntos</label>
+                            <input type="number" name="puntos" value={pointsForm.puntos} onChange={handlePointsFormChange} step="0.01" required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                        </div>
+                        <div className="flex items-end">
+                            <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                {pointsForm.id ? 'Actualizar Puntos' : 'Añadir Puntos'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
 
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Puntos de Producción</h2>
-            {/* ...formulario de puntos y catálogos... */}
-            {/* ...catálogos... */}
-
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
-            {/* Filtro por operario */}
-            <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
-                <select
-                    value={selectedOperarioId}
-                    onChange={e => setSelectedOperarioId(e.target.value)}
-                    className="w-full md:w-1/3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                >
-                    <option value="">Todos</option>
-                    {operarioIds.map(id => (
-                        <option key={id} value={id}>{id}</option>
-                    ))}
-                </select>
-            </div>
-            <div className="table-container scrollbar-hide">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
-                        <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID Operario</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Orden</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sector</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Producto</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Operación</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cantidad</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Puntos</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Observaciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {records.length === 0 ? (
-                            <tr>
-                                <td colSpan="9" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No hay registros de producción.</td>
-                            </tr>
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Puntos de Producción Cargados</h2>
+                <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
+                    <ul className="space-y-2">
+                        {pointsData.length > 0 ? (
+                            pointsData.map(point => (
+                                <li key={point.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                    <span className="text-sm">
+                                        <span className="font-bold">{point.sector}</span> + <span className="font-bold">{point.modeloProducto}</span> + <span className="font-bold">{point.operacion}</span> = <span className="text-indigo-600 dark:text-indigo-400 font-bold">{point.puntos}</span>
+                                    </span>
+                                    <div>
+                                        <button onClick={() => handleEditPoints(point)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                        <button onClick={() => handleDeletePoints(point.id)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                    </div>
+                                </li>
+                            ))
                         ) : (
-                            records
-                                .filter(record => !selectedOperarioId || record.operarioId === selectedOperarioId)
-                                .map((record) => (
-                                    <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioId?.substring(0, 8) || 'N/A'}...</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.modeloProducto}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.operacion}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.cantidad}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.puntos}</td>
-                                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{record.observaciones || 'N/A'}</td>
-                                    </tr>
-                                ))
+                            <li className="text-gray-500 dark:text-gray-400">No hay puntos de producción cargados.</li>
                         )}
-                    </tbody>
-                </table>
+                    </ul>
+                </div>
+
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Catálogos</h2>
+                <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
+                    <form onSubmit={handleCatalogSubmit} className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                        <select name="type" value={catalogForm.type} onChange={handleCatalogFormChange}
+                            className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
+                            <option value="sectors">Sectores</option>
+                            <option value="products">Modelos de Producto</option>
+                            <option value="operations">Operaciones</option>
+                        </select>
+                        <input type="text" name="value" value={catalogForm.value} onChange={handleCatalogFormChange} placeholder="Escribe para añadir o editar"
+                            className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                        <button type="submit" className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+                            {editingCatalogId ? 'Actualizar' : 'Añadir'}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Sectores</h3>
+                            <ul className="space-y-2">
+                                {sectors.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('sectors', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('sectors', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Modelos de Producto</h3>
+                            <ul className="space-y-2">
+                                {products.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('products', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('products', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Operaciones</h3>
+                            <ul className="space-y-2">
+                                {operations.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('operations', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('operations', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
+                {/* Filtro por operario */}
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
+                    <select
+                        value={selectedOperarioId}
+                        onChange={e => setSelectedOperarioId(e.target.value)}
+                        className="w-full md:w-1/3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+                    >
+                        <option value="">Todos</option>
+                        {operarioIds.map(id => (
+                            <option key={id} value={id}>{id}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="table-container scrollbar-hide">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID Operario</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Orden</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sector</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Producto</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Operación</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cantidad</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Puntos</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {records.length === 0 ? (
+                                <tr>
+                                    <td colSpan="9" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No hay registros de producción.</td>
+                                </tr>
+                            ) : (
+                                records
+                                    .filter(record => !selectedOperarioId || record.operarioId === selectedOperarioId)
+                                    .map((record) => (
+                                        <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioId?.substring(0, 8) || 'N/A'}...</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.modeloProducto}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.operacion}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.cantidad}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.puntos}</td>
+                                            <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{record.observaciones || 'N/A'}</td>
+                                        </tr>
+                                    ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    );
-};
-// ...existing code...
+        );
+    };
 
     // --- Renderizado Principal ---
     if (loading) {
