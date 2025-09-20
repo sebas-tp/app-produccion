@@ -290,6 +290,7 @@ export default function App() {
         try {
             const newRecord = {
                 operarioId: user.uid,
+                operarioEmail: user.email, // <--- GUARDA EL EMAIL DEL OPERARIO
                 orden: productionForm.orden,
                 sector: productionForm.sector,
                 operacion: productionForm.operacion,
@@ -525,8 +526,12 @@ export default function App() {
 
     // --- Panel de Administración con filtro por operario ---
     const renderAdminPanel = () => {
-        // Obtener lista única de IDs de operarios
+        // Obtener lista única de IDs de operarios y sus emails
         const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
+        const operarios = operarioIds.map(id => {
+            const rec = records.find(r => r.operarioId === id && r.operarioEmail);
+            return { id, email: rec ? rec.operarioEmail : id };
+        });
 
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
@@ -677,8 +682,8 @@ export default function App() {
                         className="w-full md:w-1/3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
                     >
                         <option value="">Todos</option>
-                        {operarioIds.map(id => (
-                            <option key={id} value={id}>{id}</option>
+                        {operarios.map(op => (
+                            <option key={op.id} value={op.id}>{op.email}</option>
                         ))}
                     </select>
                 </div>
@@ -686,7 +691,7 @@ export default function App() {
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID Operario</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Operario</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Fecha</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Orden</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sector</th>
@@ -707,7 +712,9 @@ export default function App() {
                                     .filter(record => !selectedOperarioId || record.operarioId === selectedOperarioId)
                                     .map((record) => (
                                         <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">{record.operarioId?.substring(0, 8) || 'N/A'}...</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">
+                                                {record.operarioEmail || (record.operarioId?.substring(0, 8) + '...') || 'N/A'}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.fecha}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.orden}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.sector}</td>
