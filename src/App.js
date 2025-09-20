@@ -313,62 +313,61 @@ export default function App() {
     };
 
     const handleProductionSubmit = async (e) => {
-        e.preventDefault();
-        setMessage('');
-        setIsSubmitting(true);
+    e.preventDefault();
+    setMessage('');
+    setIsSubmitting(true);
 
-        // Check for required fields before submitting
-        if (!productionForm.horarioInicio || !productionForm.horarioFin) {
-            setMessage("Error: Debes iniciar y finalizar la tarea antes de guardar el registro.");
-            setIsSubmitting(false);
-            return;
-        }
+    if (!productionForm.horarioInicio || !productionForm.horarioFin) {
+        setMessage("Error: Debes iniciar y finalizar la tarea antes de guardar el registro.");
+        setIsSubmitting(false);
+        return;
+    }
 
-        try {
-            const record = {
-                orden: productionForm.orden,
-                sector: productionForm.sector,
-                operacion: productionForm.operacion,
-                fecha: productionForm.fecha,
-                horarioInicio: productionForm.horarioInicio,
-                horarioFin: productionForm.horarioFin,
-                modeloProducto: productionForm.modeloProducto,
-                cantidad: Number(productionForm.cantidad),
-                puntos: Number(productionForm.puntos),
-                observaciones: productionForm.observaciones,
-                timestamp: new Date().toISOString()
-            };
+    try {
+        const record = {
+            orden: productionForm.orden,
+            sector: productionForm.sector,
+            operacion: productionForm.operacion,
+            fecha: productionForm.fecha,
+            horarioInicio: productionForm.horarioInicio,
+            horarioFin: productionForm.horarioFin,
+            modeloProducto: productionForm.modeloProducto,
+            cantidad: Number(productionForm.cantidad),
+            puntos: Number(productionForm.puntos),
+            observaciones: productionForm.observaciones,
+            timestamp: new Date().toISOString()
+        };
 
-            const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
-            // --- AÑADE ESTA LÍNEA AQUÍ ---
-            console.log("El operario está guardando en la ruta:", dailyRecordDocRef.path);
-            const dailyRecordDoc = await getDoc(dailyRecordDocRef);
-            
-            const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
-            const newRecordsList = [...existingRecords, record];
-            
-            await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
+        const dailyRecordDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'productionRecordsByUser', user.uid, 'dailyRecords', productionForm.fecha);
+        console.log("Referencia de documento para guardar:", dailyRecordDocRef.path);
 
-            setMessage("Record saved successfully.");
-            setProductionForm({
-                orden: '',
-                sector: '',
-                modeloProducto: '',
-                operacion: '',
-                cantidad: '',
-                puntos: 0,
-                fecha: new Date().toISOString().split('T')[0],
-                observaciones: '',
-                horarioInicio: '', // Resetting the field to an empty string
-                horarioFin: '' // Resetting the field to an empty string
-            });
-        } catch (error) {
-            console.error("Error saving the record:", error.message);
-            setMessage("Error saving the record: " + error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+        const dailyRecordDoc = await getDoc(dailyRecordDocRef);
+        
+        const existingRecords = dailyRecordDoc.exists() ? dailyRecordDoc.data().records : [];
+        const newRecordsList = [...existingRecords, record];
+        
+        await setDoc(dailyRecordDocRef, { records: newRecordsList, operarioName: user.name, timestamp: new Date().toISOString() }, { merge: true });
+
+        setMessage("Record saved successfully.");
+        setProductionForm({
+            orden: '',
+            sector: '',
+            modeloProducto: '',
+            operacion: '',
+            cantidad: '',
+            puntos: 0,
+            fecha: new Date().toISOString().split('T')[0],
+            observaciones: '',
+            horarioInicio: '',
+            horarioFin: ''
+        });
+    } catch (error) {
+        console.error("Error saving the record:", error.message);
+        setMessage("Error saving the record: " + error.message);
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     // --- Admin Panel Logic for Points ---
     const handlePointsFormChange = (e) => {
