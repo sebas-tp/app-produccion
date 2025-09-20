@@ -119,6 +119,7 @@ export default function App() {
     const [editingCatalogId, setEditingCatalogId] = useState(null);
     const [loginForm, setLoginForm] = useState({ email: '', password: '' });
     const [selectedOperarioId, setSelectedOperarioId] = useState('');
+    const [selectedFecha, setSelectedFecha] = useState('');
 
     // --- Lógica de Autenticación de Firebase y Carga de Datos ---
     useEffect(() => {
@@ -532,7 +533,7 @@ export default function App() {
             const rec = records.find(r => r.operarioId === id && r.operarioEmail);
             return { id, email: rec ? rec.operarioEmail : id };
         });
-
+        const fechasUnicas = Array.from(new Set(records.map(r => r.fecha).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
                 <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
@@ -674,19 +675,34 @@ export default function App() {
                 
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
                 {/* Filtro por operario */}
-                <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
-                    <select
-                        value={selectedOperarioId}
-                        onChange={e => setSelectedOperarioId(e.target.value)}
-                        className="w-full md:w-1/3 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                    >
-                        <option value="">Todos</option>
-                        {operarios.map(op => (
-                            <option key={op.id} value={op.id}>{op.email}</option>
-                        ))}
-                    </select>
-                </div>
+                <div className="mb-4 flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
+    <div className="flex-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
+        <select
+            value={selectedOperarioId}
+            onChange={e => setSelectedOperarioId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+        >
+            <option value="">Todos</option>
+            {operarios.map(op => (
+                <option key={op.id} value={op.id}>{op.email}</option>
+            ))}
+        </select>
+    </div>
+    <div className="flex-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Fecha:</label>
+        <select
+            value={selectedFecha}
+            onChange={e => setSelectedFecha(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+        >
+            <option value="">Todas</option>
+            {fechasUnicas.map(fecha => (
+                <option key={fecha} value={fecha}>{fecha}</option>
+            ))}
+        </select>
+    </div>
+</div>
                 <div className="table-container scrollbar-hide">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
@@ -709,7 +725,10 @@ export default function App() {
                                 </tr>
                             ) : (
                                 records
-                                    .filter(record => !selectedOperarioId || record.operarioId === selectedOperarioId)
+    .filter(record =>
+        (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
+        (!selectedFecha || record.fecha === selectedFecha)
+    )
                                     .map((record) => (
                                         <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">
