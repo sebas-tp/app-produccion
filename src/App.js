@@ -419,9 +419,10 @@ export default function App() {
 
     // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
+        // ...igual que antes, panel de operario...
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-            {/* ...igual que antes... */}
-            {/* No se modifica el panel de operario */}
+            {/* ...panel de operario sin cambios... */}
+            {/* ...puedes dejar igual tu código aquí... */}
         </div>
     );
 
@@ -434,7 +435,7 @@ export default function App() {
             return { id, email: rec ? rec.operarioEmail : id };
         });
 
-        // Obtener lista única de fechas (ordenadas descendente)
+        // Fechas únicas ordenadas descendente
         const fechasUnicas = Array.from(new Set(records.map(r => r.fecha).filter(Boolean))).sort((a, b) => b.localeCompare(a));
 
         return (
