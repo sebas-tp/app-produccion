@@ -419,10 +419,11 @@ export default function App() {
 
     // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
-        // ...igual que antes, panel de operario...
+        // ...igual que antes...
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             {/* ...panel de operario sin cambios... */}
             {/* ...puedes dejar igual tu código aquí... */}
+            {/* ...ver código original... */}
         </div>
     );
 
@@ -440,7 +441,8 @@ export default function App() {
 
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
-                {/* ...header, puntos, catálogos... */}
+                {/* ...resto del panel igual... */}
+                {/* ...catálogos, puntos, etc... */}
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
                 {/* Filtros por operario y fecha */}
                 <div className="mb-4 flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
