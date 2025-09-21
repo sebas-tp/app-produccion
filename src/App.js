@@ -293,7 +293,7 @@ export default function App() {
         try {
             const newRecord = {
                 operarioId: user.uid,
-                operarioEmail: user.email, // <--- GUARDA EL EMAIL DEL OPERARIO
+                operarioEmail: user.email,
                 orden: productionForm.orden,
                 sector: productionForm.sector,
                 operacion: productionForm.operacion,
@@ -441,16 +441,13 @@ export default function App() {
 
     // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
-        // ...igual que antes...
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
             {/* ...contenido del panel de operario... */}
-            {/* (No se modifica aquí) */}
         </div>
     );
 
     // --- Panel de Administración con filtro por operario ---
     const renderAdminPanel = () => {
-        // Obtener lista única de IDs de operarios y sus emails
         const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
         const operarios = operarioIds.map(id => {
             const rec = records.find(r => r.operarioId === id && r.operarioEmail);
@@ -459,12 +456,7 @@ export default function App() {
         const fechasUnicas = Array.from(new Set(records.map(r => r.fecha).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
-                {/* ...panel de administración arriba... */}
-
-                {/* ...catálogos y puntos... */}
-
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
-                {/* Filtro por operario */}
                 <div className="mb-4 flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
                     <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
