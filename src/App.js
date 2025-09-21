@@ -4,8 +4,6 @@ import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from
 import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 // Configuración de Firebase (variables de entorno de Vercel)
 const firebaseConfig = {
@@ -421,7 +419,7 @@ export default function App() {
         }
     };
 
-    // --- Exportar a Excel y PDF ---
+    // --- Exportar a Excel ---
     function exportarExcel() {
         // Filtra los registros según los filtros activos
         const filteredRecords = records
@@ -439,35 +437,6 @@ export default function App() {
         const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
         const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
         saveAs(blob, "registros.xlsx");
-    }
-
-    function exportarPDF() {
-        // Filtra los registros según los filtros activos
-        const filteredRecords = records
-            .filter(record =>
-                (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
-                (!selectedFecha || record.fecha === selectedFecha)
-            );
-        if (filteredRecords.length === 0) {
-            setMessage("No hay registros para exportar.");
-            return;
-        }
-        const doc = new jsPDF();
-        doc.autoTable({
-            head: [["Operario", "Fecha", "Orden", "Sector", "Producto", "Operación", "Cantidad", "Puntos", "Observaciones"]],
-            body: filteredRecords.map(r => [
-                r.operarioEmail || r.operarioId,
-                r.fecha,
-                r.orden,
-                r.sector,
-                r.modeloProducto,
-                r.operacion,
-                r.cantidad,
-                r.puntos,
-                r.observaciones || ""
-            ])
-        });
-        doc.save("registros.pdf");
     }
 
     // --- Renderizado de Paneles ---
@@ -491,6 +460,8 @@ export default function App() {
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
                 {/* ...panel de administración arriba... */}
+
+                {/* ...catálogos y puntos... */}
 
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
                 {/* Filtro por operario */}
@@ -522,10 +493,9 @@ export default function App() {
                         </select>
                     </div>
                 </div>
-                {/* Botones de exportación */}
+                {/* Botón de exportación Excel */}
                 <div className="flex space-x-2 mb-4">
                     <button onClick={exportarExcel} className="px-4 py-2 bg-green-600 text-white rounded-md">Exportar Excel</button>
-                    <button onClick={exportarPDF} className="px-4 py-2 bg-blue-600 text-white rounded-md">Exportar PDF</button>
                 </div>
                 <div className="table-container scrollbar-hide">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
