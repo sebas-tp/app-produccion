@@ -124,7 +124,6 @@ export default function App() {
     const [loginForm, setLoginForm] = useState({ email: '', password: '' });
     const [selectedOperarioId, setSelectedOperarioId] = useState('');
     const [selectedFecha, setSelectedFecha] = useState('');
-    const [editingRecord, setEditingRecord] = useState(null); // Para edición de registros
 
     // --- Lógica de Autenticación de Firebase y Carga de Datos ---
     useEffect(() => {
@@ -296,7 +295,7 @@ export default function App() {
         try {
             const newRecord = {
                 operarioId: user.uid,
-                operarioEmail: user.email,
+                operarioEmail: user.email, // <--- GUARDA EL EMAIL DEL OPERARIO
                 orden: productionForm.orden,
                 sector: productionForm.sector,
                 operacion: productionForm.operacion,
@@ -422,32 +421,41 @@ export default function App() {
         }
     };
 
-    // --- Funciones para exportar registros ---
-    const handleExportExcel = () => {
-        const exportData = records
+    // --- Exportar a Excel y PDF ---
+    function exportarExcel() {
+        // Filtra los registros según los filtros activos
+        const filteredRecords = records
             .filter(record =>
                 (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
                 (!selectedFecha || record.fecha === selectedFecha)
             );
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Registros");
-        const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-        const data = new Blob([excelBuffer], { type: "application/octet-stream" });
-        saveAs(data, "registros.xlsx");
-    };
+        if (filteredRecords.length === 0) {
+            setMessage("No hay registros para exportar.");
+            return;
+        }
+        const ws = XLSX.utils.json_to_sheet(filteredRecords);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Registros");
+        const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
+        saveAs(blob, "registros.xlsx");
+    }
 
-    const handleExportPDF = () => {
-        const exportData = records
+    function exportarPDF() {
+        // Filtra los registros según los filtros activos
+        const filteredRecords = records
             .filter(record =>
                 (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
                 (!selectedFecha || record.fecha === selectedFecha)
             );
-        const docPDF = new jsPDF();
-        docPDF.text("Registros de Producción", 10, 10);
-        docPDF.autoTable({
-            head: [['Operario', 'Fecha', 'Orden', 'Sector', 'Producto', 'Operación', 'Cantidad', 'Puntos', 'Observaciones']],
-            body: exportData.map(r => [
+        if (filteredRecords.length === 0) {
+            setMessage("No hay registros para exportar.");
+            return;
+        }
+        const doc = new jsPDF();
+        doc.autoTable({
+            head: [["Operario", "Fecha", "Orden", "Sector", "Producto", "Operación", "Cantidad", "Puntos", "Observaciones"]],
+            body: filteredRecords.map(r => [
                 r.operarioEmail || r.operarioId,
                 r.fecha,
                 r.orden,
@@ -456,22 +464,22 @@ export default function App() {
                 r.operacion,
                 r.cantidad,
                 r.puntos,
-                r.observaciones || ''
-            ]),
-            startY: 20,
-            styles: { fontSize: 8 }
+                r.observaciones || ""
+            ])
         });
-        docPDF.save("registros.pdf");
-    };
+        doc.save("registros.pdf");
+    }
 
     // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
+        // ...igual que antes...
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-            {/* ...panel de operario igual que antes... */}
+            {/* ...contenido del panel de operario... */}
+            {/* (No se modifica aquí) */}
         </div>
     );
 
-    // --- Panel de Administración con edición y exportación ---
+    // --- Panel de Administración con filtro por operario ---
     const renderAdminPanel = () => {
         // Obtener lista única de IDs de operarios y sus emails
         const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
@@ -480,12 +488,12 @@ export default function App() {
             return { id, email: rec ? rec.operarioEmail : id };
         });
         const fechasUnicas = Array.from(new Set(records.map(r => r.fecha).filter(Boolean))).sort((a, b) => b.localeCompare(a));
-
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
-                {/* ...catálogos, puntos, etc... */}
+                {/* ...panel de administración arriba... */}
+
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
-                {/* Filtros por operario y fecha */}
+                {/* Filtro por operario */}
                 <div className="mb-4 flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
                     <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
@@ -515,9 +523,9 @@ export default function App() {
                     </div>
                 </div>
                 {/* Botones de exportación */}
-                <div className="flex space-x-2 mb-2">
-                    <button onClick={handleExportExcel} className="px-4 py-2 bg-green-600 text-white rounded">Descargar Excel</button>
-                    <button onClick={handleExportPDF} className="px-4 py-2 bg-red-600 text-white rounded">Descargar PDF</button>
+                <div className="flex space-x-2 mb-4">
+                    <button onClick={exportarExcel} className="px-4 py-2 bg-green-600 text-white rounded-md">Exportar Excel</button>
+                    <button onClick={exportarPDF} className="px-4 py-2 bg-blue-600 text-white rounded-md">Exportar PDF</button>
                 </div>
                 <div className="table-container scrollbar-hide">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -532,13 +540,12 @@ export default function App() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Cantidad</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Puntos</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Observaciones</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {records.length === 0 ? (
                                 <tr>
-                                    <td colSpan="10" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No hay registros de producción.</td>
+                                    <td colSpan="9" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No hay registros de producción.</td>
                                 </tr>
                             ) : (
                                 records
@@ -559,100 +566,12 @@ export default function App() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.cantidad}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{record.puntos}</td>
                                             <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{record.observaciones || 'N/A'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <button
-                                                    onClick={() => setEditingRecord(record)}
-                                                    className="text-indigo-600 hover:text-indigo-900 transition-colors"
-                                                >
-                                                    Editar
-                                                </button>
-                                            </td>
                                         </tr>
                                     ))
                             )}
                         </tbody>
                     </table>
                 </div>
-                {/* Formulario de edición */}
-                {editingRecord && (
-                    <form
-                        onSubmit={async (e) => {
-                            e.preventDefault();
-                            try {
-                                await setDoc(
-                                    doc(db, 'artifacts', appId, 'public', 'data', 'productionRecords', editingRecord.id),
-                                    editingRecord
-                                );
-                                setMessage('Registro actualizado correctamente.');
-                                setEditingRecord(null);
-                            } catch (error) {
-                                setMessage('Error al actualizar: ' + error.message);
-                            }
-                        }}
-                        className="my-4 p-4 border rounded bg-gray-50 dark:bg-gray-700"
-                    >
-                        <h3 className="font-bold mb-2">Editar Registro</h3>
-                        <input
-                            type="text"
-                            value={editingRecord.orden}
-                            onChange={e => setEditingRecord({ ...editingRecord, orden: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Orden"
-                        />
-                        <input
-                            type="text"
-                            value={editingRecord.sector}
-                            onChange={e => setEditingRecord({ ...editingRecord, sector: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Sector"
-                        />
-                        <input
-                            type="text"
-                            value={editingRecord.modeloProducto}
-                            onChange={e => setEditingRecord({ ...editingRecord, modeloProducto: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Modelo Producto"
-                        />
-                        <input
-                            type="text"
-                            value={editingRecord.operacion}
-                            onChange={e => setEditingRecord({ ...editingRecord, operacion: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Operación"
-                        />
-                        <input
-                            type="number"
-                            value={editingRecord.cantidad}
-                            onChange={e => setEditingRecord({ ...editingRecord, cantidad: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Cantidad"
-                        />
-                        <input
-                            type="number"
-                            value={editingRecord.puntos}
-                            onChange={e => setEditingRecord({ ...editingRecord, puntos: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Puntos"
-                        />
-                        <input
-                            type="date"
-                            value={editingRecord.fecha}
-                            onChange={e => setEditingRecord({ ...editingRecord, fecha: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Fecha"
-                        />
-                        <textarea
-                            value={editingRecord.observaciones}
-                            onChange={e => setEditingRecord({ ...editingRecord, observaciones: e.target.value })}
-                            className="mb-2 p-2 border rounded w-full"
-                            placeholder="Observaciones"
-                        />
-                        <div className="flex space-x-2">
-                            <button type="submit" className="mr-2 px-4 py-2 bg-green-600 text-white rounded">Guardar</button>
-                            <button type="button" onClick={() => setEditingRecord(null)} className="px-4 py-2 bg-gray-400 text-white rounded">Cancelar</button>
-                        </div>
-                    </form>
-                )}
             </div>
         );
     };
@@ -708,6 +627,7 @@ export default function App() {
                     {message && <div className="mt-4 text-red-500 text-sm text-center">{message}</div>}
                 </div>
             ) : (
+                // Si hay un usuario, muestra el panel según su rol
                 <>
                     <div className="flex space-x-4 mb-8">
                         <button
