@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, collection, addDoc, onSnapshot, query, setDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 
 // Configuración de Firebase (variables de entorno de Vercel)
 const firebaseConfig = {
@@ -293,7 +291,7 @@ export default function App() {
         try {
             const newRecord = {
                 operarioId: user.uid,
-                operarioEmail: user.email,
+                operarioEmail: user.email, // <--- GUARDA EL EMAIL DEL OPERARIO
                 orden: productionForm.orden,
                 sector: productionForm.sector,
                 operacion: productionForm.operacion,
@@ -419,35 +417,117 @@ export default function App() {
         }
     };
 
-    // --- Exportar a Excel ---
-    function exportarExcel() {
-        // Filtra los registros según los filtros activos
-        const filteredRecords = records
-            .filter(record =>
-                (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
-                (!selectedFecha || record.fecha === selectedFecha)
-            );
-        if (filteredRecords.length === 0) {
-            setMessage("No hay registros para exportar.");
-            return;
-        }
-        const ws = XLSX.utils.json_to_sheet(filteredRecords);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Registros");
-        const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-        const blob = new Blob([excelBuffer], { type: "application/octet-stream" });
-        saveAs(blob, "registros.xlsx");
-    }
-
     // --- Renderizado de Paneles ---
     const renderOperatorPanel = () => (
         <div className="container mx-auto max-w-3xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-            {/* ...contenido del panel de operario... */}
+            <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
+                <div>
+                    <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel del Operario</h1>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
+                    </p>
+                </div>
+                <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
+                    Cerrar Sesión
+                </button>
+            </header>
+
+            {message && <div className="bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 p-4 rounded-md mb-6 transition-opacity duration-300">{message}</div>}
+
+            <form onSubmit={handleProductionSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Número de la Orden</label>
+                        <input type="text" name="orden" value={productionForm.orden} onChange={handleProductionFormChange} required
+                            className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sector</label>
+                        <select name="sector" value={productionForm.sector} onChange={handleProductionFormChange} required
+                            className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
+                            <option value="">Selecciona un sector</option>
+                            {sectors.map(sector => (<option key={sector} value={sector}>{sector}</option>))}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Fecha</label>
+                    <input type="date" name="fecha" value={productionForm.fecha} onChange={handleProductionFormChange} required
+                        className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Registro de Tarea</label>
+                        <div className="flex space-x-2 mt-1">
+                            {!taskStartTime ? (
+                                <button type="button" onClick={handleStartTask}
+                                    className="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">
+                                    Inicio de Tarea
+                                </button>
+                            ) : (
+                                <button type="button" onClick={handleEndTask}
+                                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors">
+                                    Fin de Tarea
+                                </button>
+                            )}
+                        </div>
+                        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            {productionForm.horarioInicio && productionForm.horarioFin && (
+                                <p>Duración: {productionForm.horarioInicio} - {productionForm.horarioFin}</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <SearchableDropdown
+                        options={products}
+                        value={productionForm.modeloProducto}
+                        onChange={handleProductionFormChange}
+                        name="modeloProducto"
+                        label="Modelo del Producto"
+                    />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <SearchableDropdown
+                        options={operations}
+                        value={productionForm.operacion}
+                        onChange={handleProductionFormChange}
+                        name="operacion"
+                        label="Operación"
+                    />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cantidad</label>
+                        <input type="number" name="cantidad" value={productionForm.cantidad} onChange={handleProductionFormChange} required
+                            className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Puntos</label>
+                    <input type="number" name="puntos" value={productionForm.puntos} readOnly disabled
+                        className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md cursor-not-allowed dark:bg-gray-700 dark:text-gray-400 transition-colors" />
+                </div>
+
+
+                <div className="col-span-1 md:col-span-2">
+                    <label htmlFor="observaciones" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Observaciones</label>
+                    <textarea id="observaciones" name="observaciones" rows="3" value={productionForm.observaciones} onChange={handleProductionFormChange}
+                        className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors"></textarea>
+                </div>
+
+                <button type="submit" disabled={isSubmitting || taskStartTime}
+                    className="w-full flex justify-center py-3 px-4 border border-transparent text-lg font-bold rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
+                </button>
+            </form>
         </div>
     );
 
     // --- Panel de Administración con filtro por operario ---
     const renderAdminPanel = () => {
+        // Obtener lista única de IDs de operarios y sus emails
         const operarioIds = Array.from(new Set(records.map(r => r.operarioId))).filter(Boolean);
         const operarios = operarioIds.map(id => {
             const rec = records.find(r => r.operarioId === id && r.operarioEmail);
@@ -456,39 +536,173 @@ export default function App() {
         const fechasUnicas = Array.from(new Set(records.map(r => r.fecha).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         return (
             <div className="container mx-auto max-w-5xl p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full">
+                <header className="flex justify-between items-center mb-6 border-b pb-4 border-gray-200 dark:border-gray-700">
+                    <div>
+                        <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">Panel de Administración</h1>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Bienvenido, <span className="font-mono text-gray-800 dark:text-gray-200">{user?.email || 'Cargando...'}</span>
+                        </p>
+                    </div>
+                    <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
+                        Cerrar Sesión
+                    </button>
+                </header>
+
+                {message && <div className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-4 rounded-md mb-6">{message}</div>}
+
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Puntos de Producción</h2>
+                <form onSubmit={handlePointsSubmit} className="space-y-4 mb-8 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sector</label>
+                            <select name="sector" value={pointsForm.sector} onChange={handlePointsFormChange} required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
+                                <option value="">Selecciona un sector</option>
+                                {sectors.map(sector => (<option key={sector} value={sector}>{sector}</option>))}
+                            </select>
+                        </div>
+                        <SearchableDropdown
+                            options={products}
+                            value={pointsForm.modeloProducto}
+                            onChange={handlePointsFormChange}
+                            name="modeloProducto"
+                            label="Modelo del Producto"
+                        />
+                        <SearchableDropdown
+                            options={operations}
+                            value={pointsForm.operacion}
+                            onChange={handlePointsFormChange}
+                            name="operacion"
+                            label="Operación"
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Puntos</label>
+                            <input type="number" name="puntos" value={pointsForm.puntos} onChange={handlePointsFormChange} step="0.01" required
+                                className="w-full mt-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                        </div>
+                        <div className="flex items-end">
+                            <button type="submit" className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                {pointsForm.id ? 'Actualizar Puntos' : 'Añadir Puntos'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Puntos de Producción Cargados</h2>
+                <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
+                    <ul className="space-y-2">
+                        {pointsData.length > 0 ? (
+                            pointsData.map(point => (
+                                <li key={point.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                    <span className="text-sm">
+                                        <span className="font-bold">{point.sector}</span> + <span className="font-bold">{point.modeloProducto}</span> + <span className="font-bold">{point.operacion}</span> = <span className="text-indigo-600 dark:text-indigo-400 font-bold">{point.puntos}</span>
+                                    </span>
+                                    <div>
+                                        <button onClick={() => handleEditPoints(point)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                        <button onClick={() => handleDeletePoints(point.id)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                    </div>
+                                </li>
+                            ))
+                        ) : (
+                            <li className="text-gray-500 dark:text-gray-400">No hay puntos de producción cargados.</li>
+                        )}
+                    </ul>
+                </div>
+
+                <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Gestionar Catálogos</h2>
+                <div className="p-4 border border-gray-300 dark:border-gray-600 rounded-lg mb-8">
+                    <form onSubmit={handleCatalogSubmit} className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                        <select name="type" value={catalogForm.type} onChange={handleCatalogFormChange}
+                            className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors">
+                            <option value="sectors">Sectores</option>
+                            <option value="products">Modelos de Producto</option>
+                            <option value="operations">Operaciones</option>
+                        </select>
+                        <input type="text" name="value" value={catalogForm.value} onChange={handleCatalogFormChange} placeholder="Escribe para añadir o editar"
+                            className="flex-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100 transition-colors" />
+                        <button type="submit" className="w-full md:w-auto px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors">
+                            {editingCatalogId ? 'Actualizar' : 'Añadir'}
+                        </button>
+                    </form>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Sectores</h3>
+                            <ul className="space-y-2">
+                                {sectors.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('sectors', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('sectors', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Modelos de Producto</h3>
+                            <ul className="space-y-2">
+                                {products.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('products', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('products', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="catalog-list">
+                            <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Operaciones</h3>
+                            <ul className="space-y-2">
+                                {operations.map(item => (
+                                    <li key={item} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded-md">
+                                        <span className="text-sm">{item}</span>
+                                        <div>
+                                            <button onClick={() => handleEditCatalog('operations', item)} className="text-indigo-600 hover:text-indigo-900 transition-colors mr-2">Editar</button>
+                                            <button onClick={() => handleDeleteCatalog('operations', item)} className="text-red-600 hover:text-red-900 transition-colors">Eliminar</button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
                 <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-gray-200">Registros de Producción</h2>
+                {/* Filtro por operario */}
                 <div className="mb-4 flex flex-col md:flex-row md:space-x-4 space-y-2 md:space-y-0">
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
-                        <select
-                            value={selectedOperarioId}
-                            onChange={e => setSelectedOperarioId(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                        >
-                            <option value="">Todos</option>
-                            {operarios.map(op => (
-                                <option key={op.id} value={op.id}>{op.email}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Fecha:</label>
-                        <select
-                            value={selectedFecha}
-                            onChange={e => setSelectedFecha(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
-                        >
-                            <option value="">Todas</option>
-                            {fechasUnicas.map(fecha => (
-                                <option key={fecha} value={fecha}>{fecha}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                {/* Botón de exportación Excel */}
-                <div className="flex space-x-2 mb-4">
-                    <button onClick={exportarExcel} className="px-4 py-2 bg-green-600 text-white rounded-md">Exportar Excel</button>
-                </div>
+    <div className="flex-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Operario:</label>
+        <select
+            value={selectedOperarioId}
+            onChange={e => setSelectedOperarioId(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+        >
+            <option value="">Todos</option>
+            {operarios.map(op => (
+                <option key={op.id} value={op.id}>{op.email}</option>
+            ))}
+        </select>
+    </div>
+    <div className="flex-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar por Fecha:</label>
+        <select
+            value={selectedFecha}
+            onChange={e => setSelectedFecha(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-100"
+        >
+            <option value="">Todas</option>
+            {fechasUnicas.map(fecha => (
+                <option key={fecha} value={fecha}>{fecha}</option>
+            ))}
+        </select>
+    </div>
+</div>
                 <div className="table-container scrollbar-hide">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
@@ -511,10 +725,10 @@ export default function App() {
                                 </tr>
                             ) : (
                                 records
-                                    .filter(record =>
-                                        (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
-                                        (!selectedFecha || record.fecha === selectedFecha)
-                                    )
+    .filter(record =>
+        (!selectedOperarioId || record.operarioId === selectedOperarioId) &&
+        (!selectedFecha || record.fecha === selectedFecha)
+    )
                                     .map((record) => (
                                         <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-800 dark:text-gray-200">
